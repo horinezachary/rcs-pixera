@@ -23,10 +23,19 @@
       label.f { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--rcs-muted); }
       table { width: 100%; border-collapse: collapse; }
       th { text-align: left; font-size: 13px; font-weight: 600; color: var(--rcs-muted); padding: 8px; border-bottom: 1px solid var(--rcs-border); white-space: nowrap; }
-      td { padding: 7px 8px; border-bottom: 1px solid var(--rcs-border); font-size: 15px; vertical-align: middle; }
-      td.mono { font-family: var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; }
+      td { padding: 7px 8px; border-bottom: 1px solid var(--rcs-border); font-size: 15px; vertical-align: middle; overflow-wrap: anywhere; }
+      td.mono { font-family: var(--rcs-mono); color: var(--rcs-muted); }
       td.fit { width: 1%; white-space: nowrap; }
-      .scrollx { overflow-x: auto; }
+      /* Tables fit their card: long names wrap, and narrow cards stack each row instead of scrolling sideways. */
+      .tw { min-width: 0; }
+      @container tw (max-width: 720px) {
+        .tw table, .tw tbody, .tw tr { display: block; }
+        .tw tr:has(th) { display: none; }
+        .tw tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 0; border-bottom: 1px solid var(--rcs-border); }
+        .tw td { display: block; padding: 0; border: 0; min-width: 0; }
+        .tw td.fit { width: auto; margin-left: auto; }
+      }
+      .tw { container: tw / inline-size; }
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 16px; }
       .srv .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .srv .n { font-size: 19px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -65,10 +74,10 @@
     </section>
 
     <section id="page-alerts" hidden>
-      <div class="card"><h3 id="alertsHead">Active alerts</h3><div class="scrollx"><table id="alertTable"></table></div></div>
+      <div class="card"><h3 id="alertsHead">Active alerts</h3><div class="tw"><table id="alertTable"></table></div></div>
       <div class="card">
         <div class="row"><h3 class="grow">Event log (since the module started)</h3><select id="evFilter" aria-label="Show"><option value="">Everything</option><option value="alerts">Warnings and critical</option><option value="control">Commands</option></select></div>
-        <div class="scrollx"><table id="evTable"></table></div>
+        <div class="tw"><table id="evTable"></table></div>
       </div>
     </section>
 
@@ -82,8 +91,8 @@
           <div class="row"><rcs-button id="add" variant="primary">Add</rcs-button></div>
           <h3>Scan the network</h3>
           <p>Asks every address on a /24 network for Pixera's API revision on the API port below, and tries a bare connection on 27101 (Pixera's engine manager). An answering director is asked for its project and its live systems. Nothing is changed anywhere.</p>
-          <div class="row"><input type="text" id="subnet" placeholder="the unit's own networks, or e.g. 10.10.30" style="flex: 2" /><input type="number" id="scanPort" min="1" max="65535" style="flex: 1" aria-label="API port to scan" /><rcs-button id="scan">Scan</rcs-button></div>
-          <div class="scrollx"><table id="foundTable"></table></div>
+          <div class="row"><input type="text" id="subnet" placeholder="the unit's own networks, or e.g. 10.10.30" style="flex: 2 1 200px" /><input type="number" id="scanPort" min="1" max="65535" style="flex: 1 1 100px" aria-label="API port to scan" /><rcs-button id="scan">Scan</rcs-button></div>
+          <div class="tw"><table id="foundTable"></table></div>
         </div>
         <div class="card">
           <h3>Controls</h3>
@@ -94,7 +103,7 @@
           <div class="row"><rcs-button id="saveLimits" variant="primary">Save limits</rcs-button></div>
         </div>
       </div>
-      <div class="card"><h3 id="listHead">Directors</h3><div class="scrollx"><table id="dirTable"></table></div></div>
+      <div class="card"><h3 id="listHead">Directors</h3><div class="tw"><table id="dirTable"></table></div></div>
     </section>
 
     <rcs-dialog id="confirm">
@@ -270,7 +279,7 @@
             a.append(ar);
             t.append(tr({ class: sev }, dot, td(o.name), td(o.device, 'mono'), td(res(o), 'mono'), td(!o.enabled ? 'disabled' : o.active ? 'active' : 'not active'), td(o.targets.map((y) => `${y.name} (${y.kind})`).join(', ') || '–'), td({ on: 'ON', off: 'off', partial: 'partly', none: '–' }[o.blackout]), td(o.identify === null ? '–' : o.identify ? 'ON' : 'off'), a));
           }
-          const sx = el('div', { class: 'scrollx' });
+          const sx = el('div', { class: 'tw' });
           sx.append(t);
           card.append(x.outputs.length ? sx : el('p', {}, `${x.name} reports no outputs.`));
           card.append(el('p', {}, 'Blackout here blacks out the projectors and screens assigned to the output in the PIXERA project, so the output keeps sending a signal. An output with nothing assigned cannot be blacked out from here.'));
@@ -298,7 +307,7 @@
             st.append(el('span', { class: 'tr ' + x.transport }, TR[x.transport]));
             t.append(tr({}, td(x.name), st, td(x.time || '–', 'mono'), td(x.fps ?? '–', 'mono'), td(x.opacity != null ? `${Math.round(x.opacity * 100)}%` : '–', 'mono')));
           }
-          const sx = el('div', { class: 'scrollx' });
+          const sx = el('div', { class: 'tw' });
           sx.append(t);
           c.append(d.timelines.length ? sx : el('p', {}, d.reachable ? 'No timelines' : 'Not answering'));
           box.append(c);
