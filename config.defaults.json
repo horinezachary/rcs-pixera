@@ -1,0 +1,6 @@
+{
+  "directors": [],
+  "thresholds": { "fpsDropWarnPercent": 5, "gpuTempWarnC": 80, "gpuTempCritC": 90, "unreachableAfterPolls": 3 },
+  "scanPort": 1400,
+  "allowControls": false
+}
