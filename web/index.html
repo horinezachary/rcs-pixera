@@ -1,0 +1,419 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { padding: 24px; }
+      section { display: flex; flex-direction: column; gap: 16px; max-width: 1600px; }
+      header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+      h3 { margin: 0; font-size: 15px; color: var(--rcs-muted); font-weight: 600; }
+      .grow { flex: 1; }
+      p, .note { margin: 0; color: var(--rcs-muted); font-size: 15px; line-height: 1.5; }
+      .card { border: 1px solid var(--rcs-border); border-radius: 14px; background: var(--rcs-surface); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+      .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .ok { --sev: var(--rcs-ok); } .warning { --sev: var(--rcs-warn); } .critical { --sev: var(--rcs-error); } .unknown, .info { --sev: var(--rcs-muted); }
+      .pill { height: 28px; padding: 0 12px; border-radius: 14px; font: 700 13px var(--rcs-font); display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+        color: var(--sev); background: color-mix(in srgb, var(--sev) 12%, transparent); border: 1px solid color-mix(in srgb, var(--sev) 40%, transparent); }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; background: var(--sev); flex: none; }
+      .badge { font: 600 12px var(--rcs-font); letter-spacing: 0.06em; padding: 3px 8px; border-radius: 6px; border: 1px solid currentColor; white-space: nowrap; }
+      .badge.dir { color: var(--rcs-accent); } .badge.ply { color: var(--rcs-muted); } .badge.blk { color: var(--rcs-error); } .badge.idn, .badge.tp { color: #2EC4B6; }
+      input[type=text], input[type=number], select { min-height: 44px; border-radius: 10px; border: 1px solid var(--rcs-border); background: var(--rcs-bg); color: var(--rcs-text);
+        padding: 0 12px; font: 16px var(--rcs-font); min-width: 0; box-sizing: border-box; }
+      input:focus, select:focus { outline: 2px solid var(--rcs-accent); border-color: transparent; }
+      label.f { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--rcs-muted); }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; font-size: 13px; font-weight: 600; color: var(--rcs-muted); padding: 8px; border-bottom: 1px solid var(--rcs-border); white-space: nowrap; }
+      td { padding: 7px 8px; border-bottom: 1px solid var(--rcs-border); font-size: 15px; vertical-align: middle; }
+      td.mono { font-family: var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; }
+      td.fit { width: 1%; white-space: nowrap; }
+      .scrollx { overflow-x: auto; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 16px; }
+      .srv .top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .srv .n { font-size: 19px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      dl.kv { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 14px; }
+      dl.kv dt { color: var(--rcs-muted); }
+      dl.kv dd { margin: 0; font-family: var(--rcs-mono); overflow-wrap: anywhere; }
+      .alert { font-size: 14px; color: var(--sev); display: flex; gap: 8px; align-items: center; }
+      details summary { cursor: pointer; color: var(--rcs-muted); font-size: 14px; }
+      .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; align-items: start; }
+      .limits { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 12px; }
+      .toggle { display: flex; align-items: center; gap: 14px; font-size: 16px; }
+      .tr { font: 700 12px var(--rcs-font); letter-spacing: 0.06em; }
+      .tr.play { color: var(--rcs-ok); } .tr.pause { color: var(--rcs-warn); } .tr.stop, .tr.unknown { color: var(--rcs-muted); }
+      .big { border-color: color-mix(in srgb, var(--rcs-error) 50%, var(--rcs-border)); }
+    </style>
+  </head>
+  <body>
+    <section id="page-overview">
+      <header><span class="pill" id="overall"><span class="dot"></span><span id="overallText"></span></span><span class="note" id="sub"></span></header>
+      <div id="directors" style="display: flex; flex-direction: column; gap: 16px"></div>
+    </section>
+
+    <section id="page-outputs" hidden>
+      <header><span class="note">The server shown here belongs to this browser: choosing one does not move the panel.</span><div class="grow"></div><select id="outSys" aria-label="Server"></select></header>
+      <div id="outBody" style="display: flex; flex-direction: column; gap: 16px"></div>
+      <div class="card big" id="allCard">
+        <h3>Every server</h3>
+        <p id="allNote"></p>
+        <div class="row" id="allActs"></div>
+      </div>
+    </section>
+
+    <section id="page-timelines" hidden>
+      <p>Timelines as each director reports them, read every few seconds. The module never starts, stops or moves a timeline.</p>
+      <div id="tlBody" class="two"></div>
+    </section>
+
+    <section id="page-alerts" hidden>
+      <div class="card"><h3 id="alertsHead">Active alerts</h3><div class="scrollx"><table id="alertTable"></table></div></div>
+      <div class="card">
+        <div class="row"><h3 class="grow">Event log (since the module started)</h3><select id="evFilter" aria-label="Show"><option value="">Everything</option><option value="alerts">Warnings and critical</option><option value="control">Commands</option></select></div>
+        <div class="scrollx"><table id="evTable"></table></div>
+      </div>
+    </section>
+
+    <section id="page-setup" hidden>
+      <div class="two">
+        <div class="card">
+          <h3>Add a director</h3>
+          <p>A director is the PIXERA machine that runs the project, with its native API on (Settings &gt; API: a JSON/TCP entry with a port). Its players come from its project.</p>
+          <label class="f">IP address or host name<input type="text" id="host" placeholder="10.10.30.10" /></label>
+          <div class="row"><label class="f" style="flex: 1">API port<input type="number" id="port" min="1" max="65535" /></label><label class="f" style="flex: 2">Name (empty: the project name)<input type="text" id="label" maxlength="40" /></label></div>
+          <div class="row"><rcs-button id="add" variant="primary">Add</rcs-button></div>
+          <h3>Scan the network</h3>
+          <p>Asks every address on a /24 network for Pixera's API revision on the API port below, and tries a bare connection on 27101 (Pixera's engine manager). An answering director is asked for its project and its live systems. Nothing is changed anywhere.</p>
+          <div class="row"><input type="text" id="subnet" placeholder="the unit's own networks, or e.g. 10.10.30" style="flex: 2" /><input type="number" id="scanPort" min="1" max="65535" style="flex: 1" aria-label="API port to scan" /><rcs-button id="scan">Scan</rcs-button></div>
+          <div class="scrollx"><table id="foundTable"></table></div>
+        </div>
+        <div class="card">
+          <h3>Controls</h3>
+          <label class="toggle"><rcs-toggle id="allowControls" label="Allow controls"></rcs-toggle>Allow controls</label>
+          <p>Off: the module only reads. On: the panel keys and this page can black out an output, a server or everything, switch identify and the test pattern and restart a player's engine, each after a confirmation. Commands have only been tried against the simulator.</p>
+          <h3>Alert limits</h3>
+          <div class="limits" id="limits"></div>
+          <div class="row"><rcs-button id="saveLimits" variant="primary">Save limits</rcs-button></div>
+        </div>
+      </div>
+      <div class="card"><h3 id="listHead">Directors</h3><div class="scrollx"><table id="dirTable"></table></div></div>
+    </section>
+
+    <rcs-dialog id="confirm">
+      <span id="confirmText"></span>
+      <div slot="buttons">
+        <rcs-button id="no">Cancel</rcs-button>
+        <rcs-button id="yes" variant="danger">OK</rcs-button>
+      </div>
+    </rcs-dialog>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+      const PAGES = ['overview', 'outputs', 'timelines', 'alerts', 'setup'];
+      const SEV = { ok: 'OK', warning: 'Warning', critical: 'Critical', unknown: 'Unknown' };
+      const TR = { play: 'PLAYING', pause: 'PAUSED', stop: 'STOPPED', unknown: '–' };
+      const LIMITS = [['fpsDropWarnPercent', 'Render fps drop, warn %'], ['gpuTempWarnC', 'GPU warn °C'], ['gpuTempCritC', 'GPU critical °C'], ['unreachableAfterPolls', 'Missed polls before critical']];
+      let s = null;
+      let page = 'overview';
+      let mine = ''; // this browser's server: "<director id>|<server key>"
+      let onYes = null;
+
+      function el(tag, attrs = {}, text) {
+        const e = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (v === true) e.setAttribute(k, '');
+          else if (v !== false && v != null) e.setAttribute(k, String(v));
+        }
+        if (text != null) e.textContent = text;
+        return e;
+      }
+      const button = (text, variant, fn, disabled) => {
+        const b = el('rcs-button', { size: 'small', variant, disabled: !!disabled }, text);
+        b.addEventListener('click', (e) => { e.stopPropagation(); if (!disabled) fn(); });
+        return b;
+      };
+      function ask(text, ok, variant, fn) {
+        $('confirmText').textContent = text;
+        $('yes').textContent = ok;
+        $('yes').setAttribute('variant', variant);
+        onYes = fn;
+        $('confirm').show();
+      }
+      $('no').onclick = () => { $('confirm').close(); if (s) $('allowControls').checked = s.allowControls; };
+      $('yes').onclick = () => { $('confirm').close(); onYes?.(); };
+      const tr = (attrs, ...cells) => { const r = el('tr', attrs); r.append(...cells); return r; };
+      const td = (text, cls) => el('td', cls ? { class: cls } : {}, text);
+      const when = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+      const res = (o) => (o.width ? `${o.width}×${o.height}` : '') + (o.fps ? ` @ ${o.fps} Hz` : '');
+      const servers = () => s.directors.flatMap((d) => [...d.systems].sort((a, b) => (a.role === b.role ? 0 : a.role === 'director' ? -1 : 1)).map((x) => ({ d, x })));
+      const control = (director, req, text) =>
+        ask(`${text[0].toUpperCase() + text.slice(1)}?`, 'Send', 'danger', () => rcs.send({ type: 'control', director, req, from: 'web' }));
+      const kv = (rows) => {
+        const dl = el('dl', { class: 'kv' });
+        for (const [k, v] of rows) dl.append(el('dt', {}, k), el('dd', {}, v === '' || v == null ? '–' : String(v)));
+        return dl;
+      };
+
+      function show(p) {
+        page = PAGES.includes(p) ? p : 'overview';
+        for (const x of PAGES) $('page-' + x).hidden = x !== page;
+        draw();
+      }
+
+      function draw() {
+        if (!s) return;
+        ({ overview: drawOverview, outputs: drawOutputs, timelines: drawTimelines, alerts: drawAlerts, setup: drawSetup })[page]();
+      }
+
+      function drawOverview() {
+        $('overall').className = 'pill ' + s.severity;
+        $('overallText').textContent = s.directors.length ? (s.severity === 'ok' ? 'All OK' : `${SEV[s.severity]} · ${s.alerts.length} alert${s.alerts.length === 1 ? '' : 's'}`) : 'No directors';
+        $('sub').textContent = `Read every ${s.pollSeconds} s · ${s.allowControls ? 'controls allowed' : 'read only'}`;
+        const box = $('directors');
+        box.replaceChildren();
+        if (!s.directors.length) box.append(el('p', {}, 'No PIXERA directors yet. Add one or scan the network in Setup.'));
+        for (const d of s.directors) {
+          const c = el('div', { class: 'card ' + d.severity });
+          const top = el('div', { class: 'row' });
+          const pill = el('span', { class: 'pill ' + d.severity });
+          pill.append(el('span', { class: 'dot' }), d.reachable ? SEV[d.severity] : d.lastSeen ? 'Not answering' : 'Connecting');
+          top.append(el('h2', { style: 'margin: 0; font-size: 21px' }, d.name), pill, el('span', { class: 'note' }, `${d.host}:${d.port}`));
+          if (d.testPattern) top.append(el('span', { class: 'badge tp' }, 'TEST PATTERN ON'));
+          c.append(top);
+          if (!d.reachable && d.lastError) c.append(el('p', {}, d.lastError));
+          const info = [['Project', d.projectName], ['PIXERA', d.version || 'not reported'], ['API revision', d.apiRevision != null ? `${d.apiRevision}${d.beta ? ' (beta build)' : ''}` : ''], ['Timelines', `${d.timelines.length} · ${d.timelines.filter((t) => t.transport === 'play').length} playing`]];
+          c.append(kv(info));
+          if (d.license?.length) {
+            const det = el('details');
+            det.append(el('summary', {}, 'Licence'), kv(d.license.map((v) => [v.label, v.value])));
+            c.append(det);
+          }
+          const grid = el('div', { class: 'grid' });
+          for (const x of [...d.systems].sort((a, b) => (a.role === b.role ? 0 : a.role === 'director' ? -1 : 1))) {
+            const sc = el('div', { class: 'card srv ' + x.severity, style: 'background: var(--rcs-bg)' });
+            const t = el('div', { class: 'top' });
+            const p = el('span', { class: 'pill ' + x.severity });
+            p.append(el('span', { class: 'dot' }), x.state || SEV[x.severity]);
+            t.append(el('span', { class: 'n' }, x.name), el('span', { class: 'badge ' + (x.role === 'director' ? 'dir' : 'ply') }, x.role === 'director' ? 'DIRECTOR' : 'PLAYER'), p);
+            sc.append(t);
+            for (const a of s.alerts.filter((a) => a.director === d.id && a.system === x.key)) {
+              const al = el('div', { class: 'alert ' + a.severity });
+              al.append(el('span', { class: 'dot' }), a.message.replace(`${x.name}: `, ''));
+              sc.append(al);
+            }
+            const active = x.outputs.filter((o) => o.active).length;
+            sc.append(kv([
+              ['Address', x.ip],
+              ['MAC', x.mac],
+              ['Render', x.renderFps != null ? `${x.renderFps} fps` : ''],
+              ['GPU', [x.gpuTemp != null ? `${x.gpuTemp} °C` : '', x.gpuLoad != null ? `${x.gpuLoad}% load` : ''].filter(Boolean).join(' · ')],
+              ['CPU', x.cpuLoad != null ? `${x.cpuLoad}%` : ''],
+              ['Outputs', x.outputs.length ? `${active} of ${x.outputs.length} active` : 'none'],
+              ['Blackout', { on: 'on', off: 'off', partial: 'partly on', none: 'nothing assigned' }[x.blackout]]
+            ]));
+            if (x.perf.length) {
+              const det = el('details');
+              det.append(el('summary', {}, 'All performance values'), kv(x.perf.map((v) => [v.label, v.value])));
+              sc.append(det);
+            }
+            // Choosing a card here picks the server the Outputs page opens on, in this browser only.
+            sc.style.cursor = 'pointer';
+            sc.onclick = () => { mine = `${d.id}|${x.key}`; };
+            grid.append(sc);
+          }
+          if (d.systems.length) c.append(grid);
+          box.append(c);
+        }
+      }
+
+      function drawOutputs() {
+        const list = servers();
+        const sel = $('outSys');
+        if (!list.some(({ d, x }) => `${d.id}|${x.key}` === mine)) {
+          const cur = list.find(({ d, x }) => d.id === s.current.director && x.key === s.current.system) ?? list[0];
+          mine = cur ? `${cur.d.id}|${cur.x.key}` : '';
+        }
+        sel.replaceChildren(...list.map(({ d, x }) => el('option', { value: `${d.id}|${x.key}`, selected: `${d.id}|${x.key}` === mine }, `${x.name} (${x.role}) · ${d.name}`)));
+        const body = $('outBody');
+        body.replaceChildren();
+        const v = list.find(({ d, x }) => `${d.id}|${x.key}` === mine);
+        if (!v) {
+          body.append(el('p', {}, 'No servers yet.'));
+        } else {
+          const { d, x } = v;
+          const can = s.allowControls && d.reachable && d.caps;
+          const card = el('div', { class: 'card ' + x.severity });
+          const h = el('div', { class: 'row' });
+          const p = el('span', { class: 'pill ' + x.severity });
+          p.append(el('span', { class: 'dot' }), x.state || SEV[x.severity]);
+          h.append(el('h2', { style: 'margin: 0; font-size: 20px' }, x.name), el('span', { class: 'badge ' + (x.role === 'director' ? 'dir' : 'ply') }, x.role === 'director' ? 'DIRECTOR' : 'PLAYER'), p, el('span', { class: 'note' }, `${x.ip} · ${d.name}`));
+          card.append(h);
+          const acts = el('div', { class: 'row' });
+          if (can && x.blackout !== 'none') acts.append(button(x.blackout === 'on' ? 'Server blackout off' : 'Black out this server', 'danger', () => control(d.id, { action: 'blackout', scope: 'system', system: x.key, value: x.blackout !== 'on' }, `${x.blackout === 'on' ? 'lift the blackout on' : 'black out'} every output of ${x.name}`)));
+          if (can && d.caps.identify && x.outputs.some((o) => o.identify !== null)) {
+            const on = x.outputs.some((o) => o.identify);
+            acts.append(button(on ? 'Identify off on all' : 'Identify all outputs', undefined, () => control(d.id, { action: 'identify', scope: 'system', system: x.key, value: !on }, `turn identify ${on ? 'off' : 'on'} for every output of ${x.name}`)));
+          }
+          if (can && d.caps.testPattern) acts.append(button(d.testPattern ? 'Test pattern off' : 'Test pattern on', undefined, () => control(d.id, { action: 'testPattern', value: !d.testPattern }, `turn the test pattern ${d.testPattern ? 'off' : 'on'} for every output of ${d.name} (PIXERA switches it for the whole project)`)));
+          if (can && x.role === 'player' && (d.caps.restartEngine || d.caps.restartLiveSystem)) acts.append(button('Restart engine', 'danger', () => control(d.id, { action: 'restart', system: x.key }, `restart the PIXERA engine on ${x.name} (${x.ip})? Its outputs go dark until the engine is back`)));
+          if (!s.allowControls) acts.append(el('span', { class: 'note' }, 'Read only: turn on Allow controls in Setup to send commands.'));
+          card.append(acts);
+          const t = el('table');
+          t.append(tr({}, el('th', {}, ''), el('th', {}, 'Output'), el('th', {}, 'Device'), el('th', {}, 'Format'), el('th', {}, 'State'), el('th', {}, 'Assigned'), el('th', {}, 'Blackout'), el('th', {}, 'Identify'), el('th', {}, '')));
+          for (const o of x.outputs) {
+            const sev = o.blackout === 'on' ? 'critical' : o.enabled && !o.active ? 'warning' : 'ok';
+            const dot = el('td', { class: 'fit' });
+            dot.append(el('span', { class: 'dot' }));
+            const a = el('td', { class: 'fit' });
+            const ar = el('div', { class: 'row', style: 'flex-wrap: nowrap' });
+            if (can && o.blackout !== 'none') ar.append(button(o.blackout === 'on' ? 'Blackout off' : 'Black out', 'danger', () => control(d.id, { action: 'blackout', scope: 'output', system: x.key, output: o.key, value: o.blackout !== 'on' }, `${o.blackout === 'on' ? 'lift the blackout on' : 'black out'} ${o.name} of ${x.name} (${o.targets.map((y) => y.name).join(', ')})`)));
+            if (can && o.identify !== null && d.caps.identify) ar.append(button(o.identify ? 'Identify off' : 'Identify', undefined, () => control(d.id, { action: 'identify', scope: 'output', system: x.key, output: o.key, value: !o.identify }, `turn identify ${o.identify ? 'off' : 'on'} for ${o.name} of ${x.name}`)));
+            a.append(ar);
+            t.append(tr({ class: sev }, dot, td(o.name), td(o.device, 'mono'), td(res(o), 'mono'), td(!o.enabled ? 'disabled' : o.active ? 'active' : 'not active'), td(o.targets.map((y) => `${y.name} (${y.kind})`).join(', ') || '–'), td({ on: 'ON', off: 'off', partial: 'partly', none: '–' }[o.blackout]), td(o.identify === null ? '–' : o.identify ? 'ON' : 'off'), a));
+          }
+          const sx = el('div', { class: 'scrollx' });
+          sx.append(t);
+          card.append(x.outputs.length ? sx : el('p', {}, `${x.name} reports no outputs.`));
+          card.append(el('p', {}, 'Blackout here blacks out the projectors and screens assigned to the output in the PIXERA project, so the output keeps sending a signal. An output with nothing assigned cannot be blacked out from here.'));
+          body.append(card);
+        }
+        const all = s.allBlackout;
+        $('allNote').textContent = all === 'none' ? 'No server has projectors or screens assigned to its outputs.' : `Blackout of every output on every server of every director: ${{ on: 'on now', off: 'off now', partial: 'partly on now' }[all]}.`;
+        const aa = $('allActs');
+        aa.replaceChildren();
+        if (s.allowControls && all !== 'none') aa.append(button(all === 'on' ? 'Blackout off everywhere' : 'Black out everything', 'danger', () => control('*', { action: 'blackout', scope: 'all', value: all !== 'on' }, `${all === 'on' ? 'lift the blackout on' : 'black out'} every output of every server of every director`)));
+      }
+      $('outSys').onchange = (e) => { mine = e.target.value; drawOutputs(); };
+
+      function drawTimelines() {
+        const box = $('tlBody');
+        box.replaceChildren();
+        for (const d of s.directors) {
+          const c = el('div', { class: 'card ' + d.severity });
+          c.append(el('h3', {}, `${d.name} · ${d.timelines.length} timelines`));
+          const t = el('table');
+          t.append(tr({}, el('th', {}, 'Timeline'), el('th', {}, 'Transport'), el('th', {}, 'Time'), el('th', {}, 'fps'), el('th', {}, 'Opacity')));
+          const order = { play: 0, pause: 1, stop: 2, unknown: 3 };
+          for (const x of [...d.timelines].sort((a, b) => order[a.transport] - order[b.transport])) {
+            const st = el('td');
+            st.append(el('span', { class: 'tr ' + x.transport }, TR[x.transport]));
+            t.append(tr({}, td(x.name), st, td(x.time || '–', 'mono'), td(x.fps ?? '–', 'mono'), td(x.opacity != null ? `${Math.round(x.opacity * 100)}%` : '–', 'mono')));
+          }
+          const sx = el('div', { class: 'scrollx' });
+          sx.append(t);
+          c.append(d.timelines.length ? sx : el('p', {}, d.reachable ? 'No timelines' : 'Not answering'));
+          box.append(c);
+        }
+        if (!s.directors.length) box.append(el('p', {}, 'No directors yet.'));
+      }
+
+      function drawAlerts() {
+        $('alertsHead').textContent = `Active alerts · ${s.alerts.length}`;
+        const t = $('alertTable');
+        t.replaceChildren(tr({}, el('th', {}, ''), el('th', {}, 'Severity'), el('th', {}, 'Alert'), el('th', {}, 'Director'), el('th', {}, 'Since')));
+        for (const a of s.alerts) {
+          const dot = el('td', { class: 'fit' });
+          dot.append(el('span', { class: 'dot' }));
+          t.append(tr({ class: a.severity }, dot, td(SEV[a.severity]), td(a.message), td(a.directorName), td(ago(a.since), 'mono')));
+        }
+        if (!s.alerts.length) t.append(tr({}, el('td', { colspan: 5 }, 'No active alerts')));
+        const f = $('evFilter').value;
+        const ev = s.events.filter((e) => (f === 'alerts' ? e.level === 'warning' || e.level === 'critical' : f === 'control' ? e.source === 'control' : true));
+        const et = $('evTable');
+        et.replaceChildren(tr({}, el('th', {}, 'Time'), el('th', {}, 'Level'), el('th', {}, 'Event')));
+        for (const e of ev) et.append(tr({ class: e.level }, td(when(e.time), 'mono'), td(e.level), td(e.message)));
+      }
+      $('evFilter').onchange = drawAlerts;
+
+      function drawSetup() {
+        $('allowControls').checked = s.allowControls;
+        $('scan').textContent = s.scanning ? 'Scanning…' : 'Scan';
+        $('scan').toggleAttribute('disabled', s.scanning);
+        if (document.activeElement !== $('scanPort')) $('scanPort').value = s.scanPort;
+        if (!$('port').value && document.activeElement !== $('port')) $('port').placeholder = String(s.scanPort);
+        const ft = $('foundTable');
+        ft.replaceChildren();
+        const known = new Set(s.entries.map((e) => e.host + ':' + e.port));
+        if (s.found.length) ft.append(tr({}, el('th', {}, 'Kind'), el('th', {}, 'Name'), el('th', {}, 'Address'), el('th', {}, 'Details'), el('th', {}, '')));
+        for (const x of s.found) {
+          const k = el('td');
+          k.append(el('span', { class: 'badge ' + (x.role === 'director' ? 'dir' : 'ply') }, x.role === 'director' ? 'DIRECTOR' : x.role === 'player' ? 'PLAYER' : 'PIXERA'));
+          const a = el('td', { class: 'fit' });
+          if (x.role === 'director') {
+            const added = known.has(x.host + ':' + x.port);
+            a.append(button(added ? 'Added' : 'Add', added ? undefined : 'primary', () => rcs.send({ type: 'add', host: x.host, port: x.port }), added));
+          }
+          const det = x.role === 'director' ? `project ${x.project || '?'} · ${x.players} players · API rev ${x.apiRevision ?? '?'}` : x.role === 'player' ? `in ${x.project || x.director} (director ${x.director}) · ${x.state || 'state unknown'}` : 'engine port open, no API answer: a player in no scanned project, or a director with its API off';
+          ft.append(tr({}, k, td(x.name), td(x.role === 'director' ? `${x.host}:${x.port}` : x.host, 'mono'), td(det), a));
+        }
+        const lim = $('limits');
+        if (!lim.childElementCount) {
+          for (const [k, label] of LIMITS) {
+            const l = el('label', { class: 'f' }, label);
+            l.append(el('input', { type: 'number', id: 'lim-' + k }));
+            lim.append(l);
+          }
+        }
+        for (const [k] of LIMITS) {
+          const i = $('lim-' + k);
+          if (!i.dataset.dirty && document.activeElement !== i) i.value = s.thresholds[k];
+        }
+        $('listHead').textContent = `Directors · ${s.entries.length} of 8`;
+        const t = $('dirTable');
+        t.replaceChildren(tr({}, el('th', {}, ''), el('th', {}, 'Name'), el('th', {}, 'Address'), el('th', {}, 'Status'), el('th', {}, '')));
+        s.entries.forEach((e, i) => {
+          const d = s.directors.find((x) => x.id === e.id);
+          const dot = el('td', { class: 'fit' });
+          dot.append(el('span', { class: 'dot' }));
+          const name = el('input', { type: 'text', value: e.label, placeholder: d?.projectName || 'project name', maxlength: 40, 'aria-label': 'Name' });
+          name.onchange = () => rcs.send({ type: 'edit', id: e.id, label: name.value });
+          const nm = el('td');
+          nm.append(name);
+          const acts = el('td', { class: 'fit' });
+          const row = el('div', { class: 'row', style: 'flex-wrap: nowrap' });
+          row.append(
+            button('↑', undefined, () => rcs.send({ type: 'move', id: e.id, by: -1 }), i === 0),
+            button('↓', undefined, () => rcs.send({ type: 'move', id: e.id, by: 1 }), i === s.entries.length - 1),
+            button('Remove', 'danger', () => ask(`Remove ${d?.name || e.host} from this module? Nothing changes in PIXERA.`, 'Remove', 'danger', () => rcs.send({ type: 'remove', id: e.id })))
+          );
+          acts.append(row);
+          const status = d?.reachable ? `${d.systems.length} servers · ${d.timelines.length} timelines` : d?.lastError || 'connecting';
+          t.append(tr({ class: d?.severity ?? 'unknown' }, dot, nm, td(`${e.host}:${e.port}`, 'mono'), td(status), acts));
+        });
+        if (!s.entries.length) t.append(tr({}, el('td', { colspan: 5 }, 'None yet')));
+      }
+
+      $('add').onclick = () => {
+        rcs.send({ type: 'add', host: $('host').value.trim(), port: $('port').value ? Number($('port').value) : 0, label: $('label').value });
+        $('host').value = $('port').value = $('label').value = '';
+      };
+      $('scan').onclick = () => rcs.send({ type: 'scan', subnet: $('subnet').value.trim() });
+      $('scanPort').onchange = () => rcs.send({ type: 'scan-port', port: Number($('scanPort').value) });
+      $('saveLimits').onclick = () => {
+        const values = {};
+        for (const [k] of LIMITS) {
+          const i = $('lim-' + k);
+          values[k] = Number(i.value);
+          delete i.dataset.dirty;
+        }
+        rcs.send({ type: 'thresholds', values });
+      };
+      $('limits').addEventListener('input', (e) => (e.target.dataset.dirty = '1'));
+      $('allowControls').addEventListener('change', (e) =>
+        e.detail
+          ? ask('Allow commands to PIXERA? The panel keys and this page can then black out outputs, servers and everything, switch identify and the test pattern and restart a player’s engine, each after a confirmation.', 'Allow', 'danger', () => rcs.send({ type: 'allow', on: true }))
+          : rcs.send({ type: 'allow', on: false })
+      );
+
+      const info = await rcs.ready();
+      rcs.on('page', show);
+      rcs.on('message', (m) => {
+        if (m?.type === 'snapshot') {
+          s = m;
+          draw();
+        }
+      });
+      show(info.page);
+      rcs.send({ type: 'hello' });
+    </script>
+  </body>
+</html>

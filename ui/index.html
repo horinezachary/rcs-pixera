@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body { height: 100%; overflow: hidden; }
+      main { height: 100%; display: flex; flex-direction: column; padding: 14px 28px 16px; gap: 12px; box-sizing: border-box; }
+      header { display: flex; align-items: center; gap: 14px; min-height: 48px; }
+      h1 { margin: 0; font-size: 26px; font-weight: 700; white-space: nowrap; }
+      .note { margin: 0; color: var(--rcs-muted); font-size: 14px; line-height: 1.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+      .grow { flex: 1; }
+      .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+      .empty p { margin: 0; color: var(--rcs-muted); font-size: 17px; max-width: 900px; line-height: 1.5; }
+      .ok { --sev: var(--rcs-ok); } .warning { --sev: var(--rcs-warn); } .critical { --sev: var(--rcs-error); } .unknown, .info { --sev: var(--rcs-muted); }
+      .pill { height: 30px; padding: 0 12px; border-radius: 15px; font: 700 13.5px var(--rcs-font); display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+        color: var(--sev); background: color-mix(in srgb, var(--sev) 12%, transparent); border: 1px solid color-mix(in srgb, var(--sev) 40%, transparent); }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; background: var(--sev); flex: none; }
+      .tabs { display: flex; gap: 8px; overflow: hidden; }
+      .tabs button { height: 44px; padding: 0 16px; border-radius: 10px; font: 600 15px var(--rcs-font); color: var(--rcs-text); background: var(--rcs-surface);
+        border: 1px solid var(--rcs-border); cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+      .tabs button[aria-pressed=true] { border-color: var(--rcs-accent); color: var(--rcs-accent); }
+      .label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--rcs-muted); }
+      .badge { font: 700 12px var(--rcs-font); letter-spacing: 0.06em; padding: 3px 8px; border-radius: 6px; border: 1px solid currentColor; white-space: nowrap; }
+      .badge.dir { color: var(--rcs-accent); } .badge.ply { color: var(--rcs-muted); } .badge.blk { color: var(--rcs-error); } .badge.idn, .badge.tp { color: #2EC4B6; }
+
+      /* servers */
+      #view-overview { overflow-x: auto; overflow-y: hidden; }
+      .cards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 12px; height: 100%; }
+      .card { border: 1px solid var(--rcs-border); border-radius: 14px; background: var(--rcs-surface); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+        text-align: left; color: var(--rcs-text); font: inherit; cursor: pointer; min-width: 0; height: 100%; box-sizing: border-box; overflow: hidden; }
+      .card.sel { border-color: var(--rcs-accent); box-shadow: inset 0 0 0 1px var(--rcs-accent); }
+      .card .top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+      .card .n { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+      .card .m { font: 13px var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .alerts { display: flex; flex-direction: column; gap: 3px; min-height: 20px; }
+      .alerts span { font-size: 14px; color: var(--sev); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
+      .alerts .none { color: var(--rcs-muted); }
+      .facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 14px; }
+      .facts div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .facts .v { font: 600 15px var(--rcs-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .facts .v.bad { color: var(--rcs-error); }
+      .badges { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+
+      /* outputs */
+      .outs { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 420px; gap: 16px; }
+      .ogrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); grid-auto-rows: min-content; gap: 10px; overflow: hidden; align-content: start; }
+      .out { border: 1px solid var(--rcs-border); border-radius: 12px; background: var(--rcs-surface); padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; text-align: left;
+        color: var(--rcs-text); font: inherit; cursor: pointer; min-width: 0; }
+      .out.sel { border-color: var(--rcs-accent); box-shadow: inset 0 0 0 1px var(--rcs-accent); }
+      .out .on { font-size: 17px; font-weight: 700; display: flex; gap: 8px; align-items: center; white-space: nowrap; overflow: hidden; }
+      .out .om { font: 13px var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .out.blk { background: color-mix(in srgb, var(--rcs-error) 10%, var(--rcs-surface)); }
+      .box { border: 1px solid var(--rcs-border); border-radius: 14px; background: var(--rcs-surface); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
+      .box h3 { margin: 0; font-size: 18px; }
+      .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; margin: 0; }
+      .kv dt { color: var(--rcs-muted); white-space: nowrap; }
+      .kv dd { margin: 0; font-family: var(--rcs-mono); overflow-wrap: anywhere; }
+      .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+
+      /* timelines */
+      .tls { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(460px, 1fr); gap: 16px; overflow: hidden; }
+      .tl { display: grid; grid-template-columns: 1fr 86px 130px 60px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--rcs-border); font-size: 15px; }
+      .tl:last-child { border-bottom: 0; }
+      .tl .tn { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tl .tt { font: 15px var(--rcs-mono); }
+      .tl .tf { font: 13px var(--rcs-mono); color: var(--rcs-muted); text-align: right; }
+      .tr { font: 700 12px var(--rcs-font); letter-spacing: 0.06em; }
+      .tr.play { color: var(--rcs-ok); } .tr.pause { color: var(--rcs-warn); } .tr.stop, .tr.unknown { color: var(--rcs-muted); }
+
+      /* alerts */
+      .two { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .rows { overflow: hidden; display: flex; flex-direction: column; }
+      .row { display: grid; grid-template-columns: 96px 1fr auto; gap: 12px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--rcs-border); font-size: 15px; }
+      .row .s { font-weight: 700; color: var(--sev); font-size: 13px; letter-spacing: 0.05em; }
+      .row .p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row .t { color: var(--rcs-muted); font: 13px var(--rcs-mono); white-space: nowrap; }
+      .ev { display: grid; grid-template-columns: 76px 74px 1fr; gap: 10px; padding: 5px 0; font-size: 14px; border-bottom: 1px solid var(--rcs-border); }
+      .ev .t { font: 13px var(--rcs-mono); color: var(--rcs-muted); }
+      .ev .l { font-weight: 700; font-size: 12px; letter-spacing: 0.05em; color: var(--sev); }
+      .ev .msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+      /* setup */
+      .setup { flex: 1; min-height: 0; display: grid; grid-template-columns: 420px 1fr 1fr; gap: 22px; }
+      .col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+      .toggle { display: flex; align-items: center; gap: 14px; font-size: 16px; }
+      .list { border: 1px solid var(--rcs-border); border-radius: 12px; background: var(--rcs-surface); overflow: hidden; }
+      .item { display: flex; align-items: center; gap: 12px; padding: 7px 14px; border-bottom: 1px solid var(--rcs-border); }
+      .item:last-child { border-bottom: 0; }
+      .item .t { flex: 1; min-width: 0; }
+      .item .n { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 8px; align-items: center; }
+      .item .d { font: 13px var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .fields { display: grid; grid-template-columns: 1fr 140px; gap: 10px; }
+      .limits { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+
+      .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #3A2A0E; border: 2px solid var(--rcs-accent); color: #FFE2B0;
+        padding: 10px 20px; border-radius: 12px; font-size: 17px; font-weight: 600; white-space: nowrap; z-index: 50; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1 id="title">PIXERA</h1>
+        <span class="pill" id="overall"><span class="dot"></span><span id="overallText"></span></span>
+        <span class="note" id="sub"></span>
+        <div class="grow"></div>
+        <div class="tabs" id="tabs" role="group" aria-label="Server"></div>
+      </header>
+
+      <div class="empty" id="empty" hidden>
+        <p>No PIXERA directors yet. Add a director by address in Setup, or scan the network: the module labels directors and their players. It only reads until you turn on Allow controls.</p>
+        <rcs-button id="emptySetup" variant="primary">Open Setup</rcs-button>
+      </div>
+
+      <section id="view-overview" style="flex: 1; min-height: 0" hidden><div class="cards" id="cards"></div></section>
+
+      <section id="view-outputs" class="outs" hidden>
+        <div class="ogrid" id="ogrid"></div>
+        <div class="box" id="oside"></div>
+      </section>
+
+      <section id="view-timelines" class="tls" hidden></section>
+
+      <section id="view-alerts" class="two" hidden>
+        <div class="box"><span class="label" id="alertsHead">ACTIVE ALERTS</span><div class="rows" id="alertRows"></div></div>
+        <div class="box"><span class="label">EVENT LOG</span><div class="rows" id="events"></div></div>
+      </section>
+
+      <section id="view-setup" class="setup" hidden>
+        <div class="col">
+          <span class="label">ADD A DIRECTOR</span>
+          <div class="fields">
+            <rcs-field id="address" label="IP address" kind="ip" placeholder="10.10.30.10"></rcs-field>
+            <rcs-field id="port" label="API port" kind="number"></rcs-field>
+          </div>
+          <div style="display: flex; gap: 10px"><rcs-button id="scan">Scan network</rcs-button></div>
+          <label class="toggle"><rcs-toggle id="allowControls" label="Allow controls"></rcs-toggle>Allow controls: blackout, identify, test pattern, restart</label>
+        </div>
+        <div class="col">
+          <span class="label" id="listHead">DIRECTORS</span>
+          <div class="list" id="dirList"></div>
+          <span class="label">ALERT LIMITS</span>
+          <div class="limits" id="limits"></div>
+        </div>
+        <div class="col">
+          <span class="label" id="foundHead">FOUND ON THE NETWORK</span>
+          <div class="list" id="found"></div>
+          <p class="note" style="white-space: normal">Named saves hold the director list, the API port, the alert limits and Allow controls. Restoring one never sends anything to PIXERA.</p>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <rcs-dialog id="confirm">
+      <span id="confirmText"></span>
+      <div slot="buttons">
+        <rcs-button id="no">Cancel</rcs-button>
+        <rcs-button id="yes" variant="danger">OK</rcs-button>
+      </div>
+    </rcs-dialog>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id);
+      const TITLES = { overview: 'PIXERA servers', outputs: 'Outputs', timelines: 'Timelines', alerts: 'Alerts', setup: 'Setup' };
+      const SEV = { ok: 'OK', warning: 'Warning', critical: 'Critical', unknown: 'Unknown' };
+      const LIMITS = [['fpsDropWarnPercent', 'Render fps drop, warn %'], ['gpuTempWarnC', 'GPU warn °C'], ['gpuTempCritC', 'GPU crit °C'], ['unreachableAfterPolls', 'Missed polls, crit']];
+      const TR = { play: 'PLAYING', pause: 'PAUSED', stop: 'STOPPED', unknown: '–' };
+      let s = null;
+      let onYes = null;
+
+      function el(tag, attrs = {}, text) {
+        const e = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (v === true) e.setAttribute(k, '');
+          else if (v !== false && v != null) e.setAttribute(k, String(v));
+        }
+        if (text != null) e.textContent = text;
+        return e;
+      }
+      const button = (text, variant, fn, disabled) => {
+        const b = el('rcs-button', { size: 'small', variant, disabled: !!disabled }, text);
+        b.addEventListener('click', (e) => { e.stopPropagation(); if (!disabled) fn(); });
+        return b;
+      };
+      function ask(text, ok, variant, fn) {
+        $('confirmText').textContent = text;
+        $('yes').textContent = ok;
+        $('yes').setAttribute('variant', variant);
+        onYes = fn;
+        $('confirm').show();
+      }
+      $('no').onclick = () => $('confirm').close();
+      $('yes').onclick = () => { $('confirm').close(); onYes?.(); };
+      const clock = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+      const servers = () => s.directors.flatMap((d) => [...d.systems].sort((a, b) => (a.role === b.role ? 0 : a.role === 'director' ? -1 : 1)).map((x) => ({ d, x })));
+      const cur = () => servers().find((v) => v.d.id === s.current.director && v.x.key === s.current.system);
+      const control = (director, req, what) => ask(`${what[0].toUpperCase() + what.slice(1)}?`, 'Send', 'danger', () => rcs.send({ type: 'control', director, req, from: 'panel' }));
+      const res = (o) => (o.width ? `${o.width}×${o.height}` : '') + (o.fps ? ` @ ${o.fps}` : '');
+
+      function draw() {
+        if (!s) return;
+        const v = s.view;
+        const none = !s.directors.length && v !== 'setup';
+        $('title').textContent = TITLES[v];
+        $('overall').className = 'pill ' + s.severity;
+        $('overallText').textContent = s.directors.length ? (s.severity === 'ok' ? 'All OK' : `${SEV[s.severity]}${s.alerts.length ? ` · ${s.alerts.length} alert${s.alerts.length > 1 ? 's' : ''}` : ''}`) : 'No directors';
+        const players = s.directors.reduce((n, d) => n + d.systems.filter((x) => x.role === 'player').length, 0);
+        $('sub').textContent = `${s.directors.length} director${s.directors.length === 1 ? '' : 's'} · ${players} player${players === 1 ? '' : 's'} · ${s.allowControls ? 'commands need a second key press' : 'read only'}`;
+        $('empty').hidden = !none;
+        for (const x of ['overview', 'outputs', 'timelines', 'alerts', 'setup']) $('view-' + x).hidden = none || v !== x;
+        drawTabs();
+        if (!none) ({ overview: drawServers, outputs: drawOutputs, timelines: drawTimelines, alerts: drawAlerts, setup: drawSetup })[v]();
+        const t = $('toast');
+        t.hidden = !s.armed?.what;
+        if (s.armed?.what) t.textContent = `Press the key again to send: ${s.armed.what}`;
+      }
+
+      function drawTabs() {
+        const box = $('tabs');
+        box.replaceChildren();
+        box.hidden = s.view !== 'outputs' || servers().length < 2;
+        if (box.hidden) return;
+        for (const { d, x } of servers()) {
+          const b = el('button', { 'aria-pressed': d.id === s.current.director && x.key === s.current.system, class: x.severity });
+          b.append(el('span', { class: 'dot' }), x.name);
+          b.onclick = () => rcs.send({ type: 'select', director: d.id, system: x.key });
+          box.append(b);
+        }
+      }
+
+      function fact(label, value, bad) {
+        const d = el('div');
+        d.append(el('span', { class: 'label' }, label), el('span', { class: 'v' + (bad ? ' bad' : '') }, value || '–'));
+        return d;
+      }
+
+      function drawServers() {
+        const box = $('cards');
+        box.replaceChildren();
+        for (const { d, x } of servers()) {
+          const c = el('button', { class: 'card ' + x.severity + (d.id === s.current.director && x.key === s.current.system ? ' sel' : '') });
+          c.onclick = () => rcs.send({ type: 'select', director: d.id, system: x.key });
+          const top = el('div', { class: 'top' });
+          top.append(el('span', { class: 'n' }, x.name), el('span', { class: 'badge ' + (x.role === 'director' ? 'dir' : 'ply') }, x.role === 'director' ? 'DIRECTOR' : 'PLAYER'));
+          const pill = el('span', { class: 'pill ' + x.severity });
+          pill.append(el('span', { class: 'dot' }), d.reachable ? x.state || SEV[x.severity] : 'Director not answering');
+          top.append(pill);
+          c.append(top, el('span', { class: 'm' }, `${x.ip || 'no address'} · ${d.name}${d.apiRevision ? ` · API rev ${d.apiRevision}` : ''}${d.version ? ` · ${d.version}` : ''}`));
+          const al = el('div', { class: 'alerts' });
+          const mine = s.alerts.filter((a) => a.director === d.id && a.system === x.key);
+          for (const a of mine.slice(0, 2)) {
+            const sp = el('span', { class: a.severity });
+            sp.append(el('span', { class: 'dot' }), a.message.replace(`${x.name}: `, ''));
+            al.append(sp);
+          }
+          if (!mine.length) al.append(el('span', { class: 'none' }, 'No alerts'));
+          c.append(al);
+          const active = x.outputs.filter((o) => o.active).length;
+          const f = el('div', { class: 'facts' });
+          f.append(
+            fact('RENDER', x.renderFps != null ? `${x.renderFps} fps` : ''),
+            fact('GPU', x.gpuTemp != null ? `${x.gpuTemp} °C${x.gpuLoad != null ? ` · ${x.gpuLoad}%` : ''}` : x.gpuLoad != null ? `${x.gpuLoad}%` : '', x.gpuTemp != null && x.gpuTemp >= s.thresholds.gpuTempWarnC),
+            fact('CPU', x.cpuLoad != null ? `${x.cpuLoad}%` : ''),
+            fact('OUTPUTS', x.outputs.length ? `${active}/${x.outputs.length} active` : 'none', x.outputs.some((o) => o.enabled && !o.active)),
+            fact('FORMAT', x.outputs[0] ? `${x.outputs[0].width ?? ''}×${x.outputs[0].height ?? ''}` : '')
+          );
+          c.append(f);
+          const b = el('div', { class: 'badges' });
+          if (x.blackout === 'on' || x.blackout === 'partial') b.append(el('span', { class: 'badge blk' }, x.blackout === 'on' ? 'BLACKOUT' : 'PART BLACKOUT'));
+          if (x.outputs.some((o) => o.identify)) b.append(el('span', { class: 'badge idn' }, 'IDENTIFY'));
+          if (d.testPattern) b.append(el('span', { class: 'badge tp' }, 'TEST PATTERN'));
+          c.append(b);
+          box.append(c);
+        }
+      }
+
+      function drawOutputs() {
+        const v = cur();
+        const grid = $('ogrid');
+        const side = $('oside');
+        grid.replaceChildren();
+        side.replaceChildren();
+        if (!v) return;
+        const { d, x } = v;
+        for (const o of x.outputs) {
+          const sev = o.blackout === 'on' ? 'critical' : o.enabled && !o.active ? 'warning' : 'ok';
+          const b = el('button', { class: `out ${sev}${o.key === s.current.output ? ' sel' : ''}${o.blackout === 'on' ? ' blk' : ''}` });
+          b.onclick = () => rcs.send({ type: 'select-output', output: o.key });
+          const n = el('span', { class: 'on' });
+          n.append(el('span', { class: 'dot' }), o.name);
+          b.append(n, el('span', { class: 'om' }, `${res(o) || 'no format'} · ${!o.enabled ? 'disabled' : o.active ? 'active' : 'not active'}`), el('span', { class: 'om' }, o.targets.map((t) => t.name).join(', ') || 'nothing assigned'));
+          const bs = el('div', { class: 'badges' });
+          if (o.blackout === 'on' || o.blackout === 'partial') bs.append(el('span', { class: 'badge blk' }, o.blackout === 'on' ? 'BLACKOUT' : 'PART'));
+          if (o.identify) bs.append(el('span', { class: 'badge idn' }, 'IDENTIFY'));
+          b.append(bs);
+          grid.append(b);
+        }
+        if (!x.outputs.length) grid.append(el('p', { class: 'note' }, `${x.name} reports no outputs.`));
+        const o = x.outputs.find((y) => y.key === s.current.output) ?? x.outputs[0];
+        side.append(el('h3', {}, o ? o.name : x.name));
+        const kv = el('dl', { class: 'kv' });
+        const row = (k, val) => kv.append(el('dt', {}, k), el('dd', {}, val || '–'));
+        if (o) {
+          row('Server', `${x.name} · ${x.role}`);
+          row('Device', o.device);
+          row('Format', res(o));
+          row('State', !o.enabled ? 'disabled' : o.active ? 'active' : 'enabled, not active');
+          row('Blackout', { on: 'on', off: 'off', partial: 'partly on', none: 'nothing assigned' }[o.blackout]);
+          row('Assigned', o.targets.map((t) => `${t.name} (${t.kind})`).join(', '));
+        } else row('Server', `${x.name} · ${x.state}`);
+        side.append(kv);
+        if (s.allowControls && d.reachable && d.caps) {
+          const a = el('div', { class: 'acts' });
+          if (o && o.blackout !== 'none') a.append(button(o.blackout === 'on' ? 'Blackout off' : 'Black out', 'danger', () => control(d.id, { action: 'blackout', scope: 'output', system: x.key, output: o.key, value: o.blackout !== 'on' }, `${o.blackout === 'on' ? 'lift the blackout on' : 'black out'} ${o.name} of ${x.name}`)));
+          if (o && o.identify !== null) a.append(button(o.identify ? 'Identify off' : 'Identify', undefined, () => control(d.id, { action: 'identify', scope: 'output', system: x.key, output: o.key, value: !o.identify }, `turn identify ${o.identify ? 'off' : 'on'} for ${o.name}`)));
+          if (x.blackout !== 'none') a.append(button(x.blackout === 'on' ? 'Server blackout off' : 'Black out server', 'danger', () => control(d.id, { action: 'blackout', scope: 'system', system: x.key, value: x.blackout !== 'on' }, `${x.blackout === 'on' ? 'lift the blackout on' : 'black out'} every output of ${x.name}`)));
+          if (x.role === 'player' && (d.caps.restartEngine || d.caps.restartLiveSystem)) a.append(button('Restart engine', 'danger', () => control(d.id, { action: 'restart', system: x.key }, `restart the PIXERA engine on ${x.name}? Its outputs go dark until it is back`)));
+          side.append(a);
+        }
+      }
+
+      function drawTimelines() {
+        const box = $('view-timelines');
+        box.replaceChildren();
+        for (const d of s.directors) {
+          const b = el('div', { class: 'box' });
+          const playing = d.timelines.filter((t) => t.transport === 'play').length;
+          b.append(el('span', { class: 'label' }, `${d.name.toUpperCase()} · ${d.timelines.length} TIMELINES · ${playing} PLAYING`));
+          const rows = el('div', { class: 'rows' });
+          const list = [...d.timelines].sort((a, c) => ({ play: 0, pause: 1, stop: 2, unknown: 3 })[a.transport] - ({ play: 0, pause: 1, stop: 2, unknown: 3 })[c.transport]);
+          for (const t of list) {
+            const r = el('div', { class: 'tl' });
+            r.append(el('span', { class: 'tn' }, t.name), el('span', { class: 'tr ' + t.transport }, TR[t.transport]), el('span', { class: 'tt' }, t.time || '–'), el('span', { class: 'tf' }, t.fps ? `${t.fps} fps` : ''));
+            rows.append(r);
+          }
+          if (!list.length) rows.append(el('p', { class: 'note' }, d.reachable ? 'No timelines' : 'Not answering'));
+          b.append(rows);
+          box.append(b);
+        }
+      }
+
+      function drawAlerts() {
+        $('alertsHead').textContent = `ACTIVE ALERTS · ${s.alerts.length}`;
+        const rows = $('alertRows');
+        rows.replaceChildren();
+        if (!s.alerts.length) rows.append(el('p', { class: 'note' }, 'No active alerts'));
+        for (const a of s.alerts.slice(0, 9)) {
+          const r = el('div', { class: 'row ' + a.severity });
+          r.append(el('span', { class: 's' }, a.severity.toUpperCase()), el('span', { class: 'p' }, a.message), el('span', { class: 't' }, ago(a.since)));
+          rows.append(r);
+        }
+        const ev = $('events');
+        ev.replaceChildren();
+        for (const e of s.events.slice(0, 11)) {
+          const r = el('div', { class: 'ev ' + e.level });
+          r.append(el('span', { class: 't' }, clock(e.time)), el('span', { class: 'l' }, e.level.toUpperCase()), el('span', { class: 'msg' }, e.message));
+          ev.append(r);
+        }
+      }
+
+      function drawSetup() {
+        $('allowControls').checked = s.allowControls;
+        $('scan').textContent = s.scanning ? 'Scanning…' : 'Scan network';
+        $('scan').toggleAttribute('disabled', s.scanning);
+        if (!$('port').hasAttribute('editing')) $('port').setAttribute('value', String(s.scanPort));
+        $('listHead').textContent = `DIRECTORS · ${s.entries.length} of 8`;
+        const list = $('dirList');
+        list.replaceChildren();
+        if (!s.entries.length) list.append(el('div', { class: 'item' }, 'None yet'));
+        for (const e of s.entries) {
+          const d = s.directors.find((x) => x.id === e.id);
+          const row = el('div', { class: 'item ' + (d?.severity ?? 'unknown') });
+          const t = el('div', { class: 't' });
+          t.append(el('div', { class: 'n' }, d?.name || e.label || e.host), el('div', { class: 'd' }, `${e.host}:${e.port}${d?.reachable ? ` · ${d.systems.length} servers` : d?.lastError ? ' · ' + d.lastError : ''}`));
+          row.append(el('span', { class: 'dot' }), t, button('Remove', 'danger', () => ask(`Remove ${d?.name || e.host} from this module? Nothing changes in PIXERA.`, 'Remove', 'danger', () => rcs.send({ type: 'remove', id: e.id }))));
+          list.append(row);
+        }
+        const known = new Set(s.entries.map((e) => e.host + ':' + e.port));
+        const f = $('found');
+        f.replaceChildren();
+        if (!s.found.length) f.append(el('div', { class: 'item' }, s.scanning ? 'Scanning…' : 'Press Scan network'));
+        for (const x of s.found.slice(0, 7)) {
+          const row = el('div', { class: 'item' });
+          const t = el('div', { class: 't' });
+          const n = el('div', { class: 'n' });
+          n.append(el('span', { class: 'badge ' + (x.role === 'director' ? 'dir' : 'ply') }, x.role === 'director' ? 'DIRECTOR' : x.role === 'player' ? 'PLAYER' : 'PIXERA'), x.name);
+          t.append(n, el('div', { class: 'd' }, x.role === 'director' ? `${x.host}:${x.port} · ${x.players} players · API rev ${x.apiRevision ?? '?'}` : x.role === 'player' ? `${x.host} · in ${x.project || x.director} · ${x.state || 'state unknown'}` : `${x.host} · engine port open, no API answer`));
+          row.append(t);
+          if (x.role === 'director') {
+            const added = known.has(x.host + ':' + x.port);
+            row.append(button(added ? 'Added' : 'Add', added ? undefined : 'primary', () => rcs.send({ type: 'add', host: x.host, port: x.port }), added));
+          }
+          f.append(row);
+        }
+        const lim = $('limits');
+        if (!lim.childElementCount) {
+          for (const [k, label] of LIMITS) {
+            const fld = el('rcs-field', { label, kind: 'number', 'data-k': k });
+            fld.addEventListener('change', (e) => rcs.send({ type: 'thresholds', values: { [k]: Number(e.detail) } }));
+            lim.append(fld);
+          }
+        }
+        for (const fld of lim.children) if (!fld.hasAttribute('editing')) fld.setAttribute('value', String(s.thresholds[fld.dataset.k]));
+      }
+
+      $('emptySetup').onclick = () => rcs.send({ type: 'view', view: 'setup' });
+      $('scan').onclick = () => rcs.send({ type: 'scan' });
+      $('address').addEventListener('change', (e) => {
+        if (e.detail) rcs.send({ type: 'add', host: e.detail, port: s?.scanPort });
+        $('address').setAttribute('value', '');
+      });
+      $('port').addEventListener('change', (e) => rcs.send({ type: 'scan-port', port: Number(e.detail) }));
+      $('allowControls').addEventListener('change', (e) =>
+        e.detail
+          ? ask('Allow commands to PIXERA? The keys and buttons can then black out outputs and servers, switch identify and the test pattern and restart a player’s engine, each after a confirmation.', 'Allow', 'danger', () => rcs.send({ type: 'allow', on: true }))
+          : rcs.send({ type: 'allow', on: false })
+      );
+      $('no').addEventListener('click', () => s && ($('allowControls').checked = s.allowControls));
+
+      await rcs.ready();
+      rcs.on('message', (m) => {
+        if (m?.type === 'snapshot') {
+          s = m;
+          draw();
+        }
+      });
+      rcs.send({ type: 'hello' });
+    </script>
+  </body>
+</html>
