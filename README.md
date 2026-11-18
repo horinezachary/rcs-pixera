@@ -120,6 +120,13 @@ It needs two Actions secrets:
 - `RCS_SOURCE_TOKEN`: a fine-grained token with Contents read-only on `rack-control-surface`, so the workflows
   can link the SDK from it. CI uses the tag in `package.json` `rcs.sdkRef`.
 
+## Icon and colour
+
+`assets/icon.svg` is the PIXERA mark (two triangles) without the wordmark, traced as one colour from the logo Zac
+supplied. The accent colour (`theme` in `module.json`) is the logo's yellow, darkened in Light so it reads on
+white. PIXERA is a trademark of AV Stumpfl GmbH. The mark is used only to show which software this module works
+with. This module is not made or endorsed by AV Stumpfl.
+
 ## Layout
 
 | Path | What |
