@@ -24,6 +24,10 @@
 //   key 13     blackout every output of the selected server on / off
 //   key 14     restart the PIXERA engine on the selected player
 //   key 15     blackout every output of every server on / off
+//
+// On a larger deck (controller 0.21.0+) the top row holds more servers with Alerts on its last key, the
+// rows between hold more outputs with output blackout at the end of the second row, and the bottom row
+// starts with identify, test pattern, server blackout and restart and ends with blackout all.
 //   Every command key needs a second press within 3 s.
 
 import { randomBytes } from 'node:crypto';
@@ -65,6 +69,51 @@ export type View = 'overview' | 'outputs' | 'timelines' | 'alerts' | 'setup';
 const VIEWS: View[] = ['overview', 'outputs', 'timelines', 'alerts', 'setup'];
 
 export const KEY = { SYS: [0, 1, 2, 3], ALERTS: 4, OUT: [5, 6, 7, 8], OUT_BLACKOUT: 9, IDENTIFY: 10, TEST: 11, SYS_BLACKOUT: 12, RESTART: 13, ALL_BLACKOUT: 14 } as const;
+
+export interface Grid {
+  columns: number;
+  rows: number;
+}
+
+/** The deck as the controller describes it. Older controllers send no size: 5 × 3. */
+export function grid(ctx: { host: { deck: { columns?: number; rows?: number } } }): Grid {
+  return { columns: ctx.host.deck.columns ?? 5, rows: ctx.host.deck.rows ?? 3 };
+}
+
+export interface Layout {
+  keys: number;
+  /** Server keys; the last pages when there are more servers than keys. */
+  sys: number[];
+  alerts: number;
+  /** Output keys; the last pages when there are more outputs than keys. */
+  out: number[];
+  outBlackout: number;
+  identify: number;
+  test: number;
+  sysBlackout: number;
+  restart: number;
+  allBlackout: number;
+}
+
+/** Where everything goes on a deck of this size. On 5 × 3 it is KEY. */
+export function layout(g: Grid): Layout {
+  const C = g.columns;
+  const keys = C * g.rows;
+  const bottom = keys - C;
+  const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
+  return {
+    keys,
+    sys: range(0, C - 1),
+    alerts: C - 1,
+    out: [...range(C, 2 * C - 1), ...range(2 * C, bottom)],
+    outBlackout: 2 * C - 1,
+    identify: bottom,
+    test: bottom + 1,
+    sysBlackout: bottom + 2,
+    restart: bottom + 3,
+    allBlackout: keys - 1
+  };
+}
 export const MAX_DIRECTORS = 8;
 export const CONFIRM_MS = 3000;
 const pollMs = () => Number(process.env.RCS_PIXERA_POLL_MS) || 3000;
@@ -214,8 +263,8 @@ export function snapshot(ctx: C) {
 
 // ---- keys --------------------------------------------------------------------------------------
 
-function paging(n: number): { perPage: number; pages: number } {
-  const perPage = n > 4 ? 3 : 4;
+function paging(n: number, slots: number): { perPage: number; pages: number } {
+  const perPage = n > slots ? slots - 1 : slots;
   return { perPage, pages: Math.max(1, Math.ceil(n / perPage)) };
 }
 
@@ -223,7 +272,8 @@ function paging(n: number): { perPage: number; pages: number } {
 export function commandFor(ctx: C, index: number): { director: string; req: ControlRequest } | null {
   const srv = currentServer(ctx);
   if (!rt) return null;
-  if (index === KEY.ALL_BLACKOUT) {
+  const L = layout(grid(ctx));
+  if (index === L.allBlackout) {
     const b = allBlackout();
     return b === 'none' ? null : { director: '*', req: { action: 'blackout', scope: 'all', value: b !== 'on' } };
   }
@@ -232,11 +282,11 @@ export function commandFor(ctx: C, index: number): { director: string; req: Cont
   const s = srv.system;
   const out = currentOutput(ctx, srv);
   let req: ControlRequest | null = null;
-  if (index === KEY.OUT_BLACKOUT && out && out.blackout !== 'none') req = { action: 'blackout', scope: 'output', system: s.key, output: out.key, value: out.blackout !== 'on' };
-  if (index === KEY.IDENTIFY && out && out.identify !== null) req = { action: 'identify', scope: 'output', system: s.key, output: out.key, value: !out.identify };
-  if (index === KEY.TEST && d.testPattern !== null && d.testPattern !== undefined) req = { action: 'testPattern', value: !d.testPattern };
-  if (index === KEY.SYS_BLACKOUT && systemBlackout(s) !== 'none') req = { action: 'blackout', scope: 'system', system: s.key, value: systemBlackout(s) !== 'on' };
-  if (index === KEY.RESTART && s.role === 'player') req = { action: 'restart', system: s.key };
+  if (index === L.outBlackout && out && out.blackout !== 'none') req = { action: 'blackout', scope: 'output', system: s.key, output: out.key, value: out.blackout !== 'on' };
+  if (index === L.identify && out && out.identify !== null) req = { action: 'identify', scope: 'output', system: s.key, output: out.key, value: !out.identify };
+  if (index === L.test && d.testPattern !== null && d.testPattern !== undefined) req = { action: 'testPattern', value: !d.testPattern };
+  if (index === L.sysBlackout && systemBlackout(s) !== 'none') req = { action: 'blackout', scope: 'system', system: s.key, value: systemBlackout(s) !== 'on' };
+  if (index === L.restart && s.role === 'player') req = { action: 'restart', system: s.key };
   if (!req) return null;
   const r = rt.monitor.reading(d.id);
   try {
@@ -255,14 +305,15 @@ function keyFaces(ctx: C): KeySetParams[] {
   const faces: KeySetParams[] = [];
   const blank = (index: number): KeySetParams => ({ index });
 
-  const { perPage, pages } = paging(list.length);
+  const L = layout(grid(ctx));
+  const { perPage, pages } = paging(list.length, L.sys.length);
   const page = Math.min(rt?.sysPage ?? 0, pages - 1);
-  for (let k = 0; k < 4; k++) {
-    if (k === 3 && pages > 1) {
+  for (const [i, k] of L.sys.entries()) {
+    if (i === L.sys.length - 1 && pages > 1) {
       faces.push({ index: k, label: 'MORE ▶', sublabel: `${page + 1} of ${pages}` });
       continue;
     }
-    const x = list[page * perPage + k];
+    const x = list[page * perPage + i];
     if (!x) {
       faces.push(blank(k));
       continue;
@@ -275,7 +326,7 @@ function keyFaces(ctx: C): KeySetParams[] {
     faces.push({ index: k, label: short(x.system.name.toUpperCase(), 10), sublabel: sub, ...(bg ? { background: bg } : {}), ...(sel ? { color: ON_ACCENT } : {}) });
   }
   const n = activeAlerts().length;
-  faces.push({ index: KEY.ALERTS, label: 'ALERTS', sublabel: n ? `${n} active` : 'none', ...(n ? { background: ACCENT, color: ON_ACCENT } : {}) });
+  faces.push({ index: L.alerts, label: 'ALERTS', sublabel: n ? `${n} active` : 'none', ...(n ? { background: ACCENT, color: ON_ACCENT } : {}) });
 
   const armed = rt?.armed?.key ?? -1;
   const allow = c.allowControls;
@@ -287,11 +338,11 @@ function keyFaces(ctx: C): KeySetParams[] {
   };
 
   const outs = srv?.system.outputs ?? [];
-  const op = paging(outs.length);
+  const op = paging(outs.length, L.out.length);
   const opage = Math.min(rt?.outPage ?? 0, op.pages - 1);
   const out = currentOutput(ctx, srv);
-  (KEY.OUT as readonly number[]).forEach((index, k) => {
-    if (k === 3 && op.pages > 1) return faces.push({ index, label: 'OUTPUTS ▶', sublabel: `${opage + 1} of ${op.pages}` });
+  L.out.forEach((index, k) => {
+    if (k === L.out.length - 1 && op.pages > 1) return faces.push({ index, label: 'OUTPUTS ▶', sublabel: `${opage + 1} of ${op.pages}` });
     const o = outs[opage * op.perPage + k];
     if (!o) return faces.push(blank(index));
     const sel = o.key === out?.key;
@@ -301,23 +352,24 @@ function keyFaces(ctx: C): KeySetParams[] {
   });
 
   if (!srv) {
-    for (let k = 9; k < 14; k++) faces.push(blank(k));
+    for (const k of [L.outBlackout, L.identify, L.test, L.sysBlackout, L.restart]) faces.push(blank(k));
   } else {
-    faces.push(out && out.blackout !== 'none' ? cmd(KEY.OUT_BLACKOUT, 'BLACKOUT', out.blackout === 'on' ? 'OUTPUT ON' : short(out.name.toUpperCase(), 12), out.blackout === 'on', RED, '#141414') : blank(KEY.OUT_BLACKOUT));
-    faces.push(out && out.identify !== null ? cmd(KEY.IDENTIFY, 'IDENTIFY', out.identify ? 'ON' : short(out.name.toUpperCase(), 12), !!out.identify, TEAL, '#06201D') : blank(KEY.IDENTIFY));
+    faces.push(out && out.blackout !== 'none' ? cmd(L.outBlackout, 'BLACKOUT', out.blackout === 'on' ? 'OUTPUT ON' : short(out.name.toUpperCase(), 12), out.blackout === 'on', RED, '#141414') : blank(L.outBlackout));
+    faces.push(out && out.identify !== null ? cmd(L.identify, 'IDENTIFY', out.identify ? 'ON' : short(out.name.toUpperCase(), 12), !!out.identify, TEAL, '#06201D') : blank(L.identify));
     const tp = srv.director.testPattern;
-    faces.push(tp === true || tp === false ? cmd(KEY.TEST, 'TEST PTN', tp ? 'ON · ALL' : 'ALL OUTPUTS', tp, TEAL, '#06201D') : blank(KEY.TEST));
+    faces.push(tp === true || tp === false ? cmd(L.test, 'TEST PTN', tp ? 'ON · ALL' : 'ALL OUTPUTS', tp, TEAL, '#06201D') : blank(L.test));
     const sb = systemBlackout(srv.system);
-    faces.push(sb !== 'none' ? cmd(KEY.SYS_BLACKOUT, 'SERVER BLK', sb === 'on' ? 'ON' : sb === 'partial' ? 'PARTLY ON' : short(srv.system.name.toUpperCase(), 12), sb === 'on', RED, '#141414') : blank(KEY.SYS_BLACKOUT));
-    faces.push(srv.system.role === 'player' ? cmd(KEY.RESTART, 'RESTART', short(srv.system.name.toUpperCase(), 12)) : blank(KEY.RESTART));
+    faces.push(sb !== 'none' ? cmd(L.sysBlackout, 'SERVER BLK', sb === 'on' ? 'ON' : sb === 'partial' ? 'PARTLY ON' : short(srv.system.name.toUpperCase(), 12), sb === 'on', RED, '#141414') : blank(L.sysBlackout));
+    faces.push(srv.system.role === 'player' ? cmd(L.restart, 'RESTART', short(srv.system.name.toUpperCase(), 12)) : blank(L.restart));
   }
   const ab = allBlackout();
-  faces.push(ab !== 'none' ? cmd(KEY.ALL_BLACKOUT, 'BLACKOUT', ab === 'on' ? 'ALL · ON' : ab === 'partial' ? 'ALL · PARTLY' : 'ALL SERVERS', ab === 'on', RED, '#141414') : blank(KEY.ALL_BLACKOUT));
+  faces.push(ab !== 'none' ? cmd(L.allBlackout, 'BLACKOUT', ab === 'on' ? 'ALL · ON' : ab === 'partial' ? 'ALL · PARTLY' : 'ALL SERVERS', ab === 'on', RED, '#141414') : blank(L.allBlackout));
 
   if (!allow) {
+    const commands = new Set([L.outBlackout, L.identify, L.test, L.sysBlackout, L.restart, L.allBlackout]);
     for (const f of faces) {
-      if (f.index < 9 || !f.label) continue;
-      if (f.index === KEY.ALL_BLACKOUT) Object.assign(f, { label: 'VIEW ONLY', sublabel: 'see Setup' });
+      if (!commands.has(f.index) || !f.label) continue;
+      if (f.index === L.allBlackout) Object.assign(f, { label: 'VIEW ONLY', sublabel: 'see Setup' });
       delete f.background;
       delete f.color;
     }
@@ -612,6 +664,19 @@ export function requestOf(m: any): ControlRequest | null {
 }
 
 export default defineModule<State, Config>({
+  // Every key of a larger deck: more servers and outputs. Older controllers ignore this and send 15 keys.
+  fullDeck: true,
+
+  // The deck changed size: an armed key may have moved and the pages changed.
+  async deck(ctx) {
+    if (!rt) return;
+    disarm();
+    rt.sysPage = 0;
+    rt.outPage = 0;
+    await ctx.keys.clear();
+    await draw(ctx);
+  },
+
   async start(ctx) {
     if (rt) rt.monitor.stop();
     const c = cfg(ctx);
@@ -646,23 +711,25 @@ export default defineModule<State, Config>({
 
   async key(ctx, { index, action }) {
     if (action !== 'down' || !rt) return;
-    if (index < 4) {
+    const L = layout(grid(ctx));
+    const sys = L.sys.indexOf(index);
+    if (sys >= 0) {
       const list = servers();
-      const { perPage, pages } = paging(list.length);
-      if (index === 3 && pages > 1) {
+      const { perPage, pages } = paging(list.length, L.sys.length);
+      if (sys === L.sys.length - 1 && pages > 1) {
         rt.sysPage = (rt.sysPage + 1) % pages;
         return draw(ctx);
       }
-      const x = list[Math.min(rt.sysPage, pages - 1) * perPage + index];
+      const x = list[Math.min(rt.sysPage, pages - 1) * perPage + sys];
       if (x) await selectServer(ctx, x.director.id, x.system.key);
       return;
     }
-    if (index === KEY.ALERTS) return setView(ctx, 'alerts');
-    const out = (KEY.OUT as readonly number[]).indexOf(index);
+    if (index === L.alerts) return setView(ctx, 'alerts');
+    const out = L.out.indexOf(index);
     if (out >= 0) {
       const outs = currentServer(ctx)?.system.outputs ?? [];
-      const { perPage, pages } = paging(outs.length);
-      if (out === 3 && pages > 1) {
+      const { perPage, pages } = paging(outs.length, L.out.length);
+      if (out === L.out.length - 1 && pages > 1) {
         rt.outPage = (rt.outPage + 1) % pages;
         return draw(ctx);
       }

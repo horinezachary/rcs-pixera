@@ -33,6 +33,11 @@ the licence, the event log with filters and blackout of everything.
 | 14 | Restart the PIXERA engine on the selected player |
 | 15 | Blackout of every output of every server of every director on / off |
 
+On a larger deck (an XL, 8×4, or a Stream Deck + XL, 9×4) the top row holds more servers with Alerts on its
+last key, the rows between hold more outputs with output blackout at the end of the second row, and the
+bottom row starts with identify, test pattern, server blackout and restart and ends with blackout of every
+server. This needs controller 0.21.0 or later; older controllers show the 15-key layout.
+
 Every command key needs a **second press within 3 seconds**: the first press only arms it (the key reads PRESS
 AGAIN and the screen names the command). Any other key disarms it.
 
