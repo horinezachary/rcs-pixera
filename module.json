@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Find and watch PIXERA directors and players, with confirmed output controls",
   "icon": "assets/icon.svg",
+  "theme": { "accent": "#FFDC00", "light": { "accent": "#9C8200" } },
   "apiVersion": 1,
   "entry": "dist/index.js",
   "ui": "ui",
