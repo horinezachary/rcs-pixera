@@ -47,9 +47,9 @@ async function director(o: PixeraSimOptions = {}) {
 
 const entry = (id: string, port: number) => ({ id, host: '127.0.0.1', port, label: '' });
 
-async function start(directors: Config['directors'], extra: { allow?: boolean; state?: State; reason?: 'boot' | 'restore' | 'user' } = {}) {
+async function start(directors: Config['directors'], extra: { allow?: boolean; state?: State; reason?: 'boot' | 'restore' | 'user'; deck?: { columns: number; rows: number } } = {}) {
   const config: Config = { directors, thresholds: DEFAULT_THRESHOLDS, scanPort: 1400, allowControls: extra.allow ?? false };
-  sim = await startTestModule(mod, { config, state: extra.state, reason: extra.reason });
+  sim = await startTestModule(mod, { config, state: extra.state, reason: extra.reason, deck: extra.deck });
   await sim.settle();
   await until(() => last()?.directors?.length === directors.length && last().directors.every((d: any) => d.reachable && d.systems.length), 5000, 'for the directors');
   await sim.settle();
@@ -271,5 +271,30 @@ describe('setup and discovery', () => {
       ['player', 'Player 2', '10.10.30.12']
     ]);
     expect(p.writes).toEqual([]);
+  });
+});
+
+describe('a larger Stream Deck', () => {
+  it('spreads servers, outputs and commands over an XL, and goes back to 15 keys on a smaller deck', async () => {
+    const { p, port } = await director();
+    await start([entry('00000001', port)], { allow: true, deck: { columns: 8, rows: 4 } });
+    expect(sim!.keys).toHaveLength(32);
+    expect(sim!.keys[7]).toMatchObject({ label: 'ALERTS' });
+    expect(sim!.keys[8]).toMatchObject({ label: 'LED MAIN L' }); // outputs start on the second row
+    expect(sim!.keys[15]).toMatchObject({ label: 'BLACKOUT' }); // output blackout ends it
+    expect(sim!.keys[24]).toMatchObject({ label: 'IDENTIFY' });
+    expect(sim!.keys[31]).toMatchObject({ label: 'BLACKOUT', sublabel: 'ALL SERVERS' });
+    await sim!.press(15);
+    expect(sim!.keys[15]).toMatchObject({ sublabel: 'PRESS AGAIN' });
+    await sim!.press(15);
+    await until(() => server('Player 1').outputs[0].blackout === 'on', 3000, 'for the read-back');
+    expect(p.writes).toHaveLength(1);
+
+    await sim!.setDeck(5, 3);
+    await sim!.settle();
+    expect(sim!.keys).toHaveLength(15);
+    expect(sim!.keys[KEY.ALERTS]).toMatchObject({ label: 'ALERTS' });
+    expect(sim!.keys[KEY.OUT[0]]).toMatchObject({ label: 'LED MAIN L' });
+    expect(sim!.keys[KEY.ALL_BLACKOUT]).toMatchObject({ label: 'BLACKOUT' });
   });
 });
