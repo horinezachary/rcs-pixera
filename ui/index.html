@@ -26,10 +26,6 @@
       /* servers */
       #view-overview { overflow-x: auto; overflow-y: hidden; }
       .cards { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 12px; height: 100%; }
-      /* A taller screen (fullPanel, 1824×1080): server cards wrap into rows instead of squeezing into one. */
-      @media (min-height: 700px) {
-        .cards { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); height: auto; align-content: start; }
-      }
       .card { border: 1px solid var(--rcs-border); border-radius: 14px; background: var(--rcs-surface); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
         text-align: left; color: var(--rcs-text); font: inherit; cursor: pointer; min-width: 0; height: 100%; box-sizing: border-box; overflow: hidden; }
       .card.sel { border-color: var(--rcs-accent); box-shadow: inset 0 0 0 1px var(--rcs-accent); }
@@ -98,6 +94,45 @@
 
       .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #3A2A0E; border: 2px solid var(--rcs-accent); color: #FFE2B0;
         padding: 10px 20px; border-radius: 12px; font-size: 17px; font-weight: 600; white-space: nowrap; z-index: 50; }
+      /* A taller screen (fullPanel, 1824×1080). The 440 px bar never matches this. Server cards take the full
+         height with their outputs, alerts and performance values; Outputs shows every server's outputs at once,
+         grouped by server. */
+      .tall-only { display: none; }
+      @media (min-height: 700px) {
+        .cards { grid-auto-flow: row; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr)); grid-auto-columns: auto; gap: 16px; }
+        .card { padding: 14px 18px; gap: 10px; }
+        .card .n { font-size: 22px; }
+        .card .m { white-space: normal; overflow-wrap: anywhere; }
+        .alerts span { white-space: normal; }
+        .facts { grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); }
+        .facts .v { font-size: 17px; }
+        .badges { margin-top: 0; }
+        .sect { display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+        .orow { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--rcs-border); font-size: 15px; }
+        .orow:last-child { border-bottom: 0; }
+        .orow .dot { align-self: center; }
+        .orow .on2 { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .orow .of { font: 13px var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; }
+        .orow .oa { grid-column: 2 / -1; font: 13px var(--rcs-mono); color: var(--rcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .orow .oa.blk { color: var(--rcs-error); }
+        .perf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 2px 16px; font-size: 14px; }
+        .perf div { display: flex; justify-content: space-between; gap: 8px; min-width: 0; }
+        .perf .pl { color: var(--rcs-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .perf .pv { font-family: var(--rcs-mono); white-space: nowrap; }
+        .card .more { color: var(--rcs-muted); font-size: 14px; }
+
+        .groups { display: flex; flex-direction: column; gap: 14px; overflow: hidden; min-height: 0; }
+        .grp { display: flex; flex-direction: column; gap: 8px; flex: none; }
+        .grp h2 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; white-space: nowrap; }
+        .grp h2 .m { font: 13px var(--rcs-mono); color: var(--rcs-muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+        .grp.cur h2 > .gn { color: var(--rcs-accent); }
+        .grp .ogrid { overflow: visible; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+        .grp .out { padding: 12px 16px; gap: 5px; min-height: 96px; }
+        .grp .out .om { font-size: 14px; }
+        .swmore { color: var(--rcs-muted); font-size: 14px; }
+        .tall-only { display: flex; }
+        #ogrid.short { display: none; }
+      }
     </style>
   </head>
   <body>
@@ -119,6 +154,7 @@
 
       <section id="view-outputs" class="outs" hidden>
         <div class="ogrid" id="ogrid"></div>
+        <div class="groups tall-only" id="groups"></div>
         <div class="box" id="oside"></div>
       </section>
 
@@ -239,10 +275,31 @@
         return d;
       }
 
+      const tallQuery = matchMedia('(min-height: 700px)');
+      const isTall = () => tallQuery.matches;
+      tallQuery.addEventListener('change', () => draw());
+      addEventListener('resize', () => draw());
+      const RANK = { critical: 0, warning: 1, unknown: 2, ok: 3 };
+      const lost = (d, x) => !d.reachable || /lost/i.test(x.state) || x.connected === false;
+
       function drawServers() {
         const box = $('cards');
         box.replaceChildren();
-        for (const { d, x } of servers()) {
+        const tall = isTall();
+        let list = servers();
+        const total = list.length;
+        if (tall) {
+          // Up to nine cards: one row up to three servers, then 2×2, 3×2 and 3×3. Servers that are lost or have
+          // alerts come first, so they are never the ones left out.
+          const alertsOf = (d, x) => s.alerts.filter((a) => a.director === d.id && a.system === x.key).length;
+          list = list.map((v, i) => [v, i]).sort((a, b) => (lost(a[0].d, a[0].x) ? 0 : 1) - (lost(b[0].d, b[0].x) ? 0 : 1) || (alertsOf(a[0].d, a[0].x) ? 0 : 1) - (alertsOf(b[0].d, b[0].x) ? 0 : 1) || RANK[a[0].x.severity] - RANK[b[0].x.severity] || a[1] - b[1]).map(([v]) => v);
+          const cols = total <= 3 ? Math.max(1, total) : total === 4 ? 2 : 3;
+          const rows = Math.min(3, Math.ceil(total / cols));
+          box.style.setProperty('--cols', String(cols));
+          box.style.setProperty('--rows', String(rows));
+          if (total > cols * rows) list = list.slice(0, cols * rows - 1);
+        }
+        for (const { d, x } of list) {
           const c = el('button', { class: 'card ' + x.severity + (d.id === s.current.director && x.key === s.current.system ? ' sel' : '') });
           c.onclick = () => rcs.send({ type: 'select', director: d.id, system: x.key });
           const top = el('div', { class: 'top' });
@@ -253,7 +310,7 @@
           c.append(top, el('span', { class: 'm' }, `${x.ip || 'no address'} · ${d.name}${d.apiRevision ? ` · API rev ${d.apiRevision}` : ''}${d.version ? ` · ${d.version}` : ''}`));
           const al = el('div', { class: 'alerts' });
           const mine = s.alerts.filter((a) => a.director === d.id && a.system === x.key);
-          for (const a of mine.slice(0, 2)) {
+          for (const a of mine.slice(0, tall ? 8 : 2)) {
             const sp = el('span', { class: a.severity });
             sp.append(el('span', { class: 'dot' }), a.message.replace(`${x.name}: `, ''));
             al.append(sp);
@@ -275,8 +332,114 @@
           if (x.outputs.some((o) => o.identify)) b.append(el('span', { class: 'badge idn' }, 'IDENTIFY'));
           if (d.testPattern) b.append(el('span', { class: 'badge tp' }, 'TEST PATTERN'));
           c.append(b);
+          if (tall) tallServer(c, d, x, mine);
           box.append(c);
         }
+        if (tall && total > list.length) {
+          const more = el('div', { class: 'card unknown', style: 'align-items: center; justify-content: center; cursor: default' });
+          more.append(el('span', { class: 'more' }, `+${total - list.length} more servers, all listed in the web view`));
+          box.append(more);
+        }
+        // A card short of room drops its performance values, then lists fewer outputs; never its alerts.
+        if (tall)
+          for (const c of box.children) {
+            if (c.scrollHeight > c.clientHeight + 1) c.querySelector('.sect.perf-s')?.remove();
+            const rows = [...c.querySelectorAll('.orow')];
+            const extra = c.querySelector('.omore');
+            let cut = 0;
+            while (c.scrollHeight > c.clientHeight + 1 && rows.length > 1) (rows.pop().remove(), cut++);
+            if (cut && extra) extra.textContent = `+${cut + Number(extra.dataset.n || 0)} more outputs`;
+          }
+      }
+
+      function outState(o) {
+        return o.blackout === 'on' ? 'critical' : o.enabled && !o.active ? 'warning' : !o.enabled ? 'unknown' : 'ok';
+      }
+
+      // On a tall screen: each output with its format, state and what is assigned, and every performance value.
+      function tallServer(c, d, x, mine) {
+        if (mine.length > 8) c.querySelector('.alerts').append(el('span', { class: 'none' }, `and ${mine.length - 8} more`));
+        if (x.outputs.length) {
+          const sect = el('div', { class: 'sect' });
+          sect.append(el('span', { class: 'label' }, `OUTPUTS · ${x.outputs.length}`));
+          for (const o of x.outputs) {
+            const r = el('div', { class: 'orow ' + outState(o) });
+            const assigned = o.targets.map((t) => t.name).join(', ') || 'nothing assigned';
+            r.append(
+              el('span', { class: 'dot' }),
+              el('span', { class: 'on2' }, o.name),
+              el('span', { class: 'of' }, `${res(o) || 'no format'} · ${!o.enabled ? 'disabled' : o.active ? 'active' : 'not active'}`),
+              el('span', { class: 'oa' + (o.blackout === 'on' ? ' blk' : '') }, o.blackout === 'on' ? `BLACKED OUT · ${assigned}` : o.blackout === 'partial' ? `PART BLACKOUT · ${assigned}` : assigned)
+            );
+            sect.append(r);
+          }
+          const more = el('span', { class: 'more omore', 'data-n': '0' });
+          sect.append(more);
+          c.append(sect);
+        }
+        const shown = new Set(['render fps', 'gpu temperature', 'gpu temp', 'cpu load', 'gpu load']);
+        const perf = (x.perf ?? []).filter((p) => !shown.has(String(p.label).toLowerCase()));
+        if (perf.length) {
+          const sect = el('div', { class: 'sect perf-s' });
+          sect.append(el('span', { class: 'label' }, 'PERFORMANCE'));
+          const g = el('div', { class: 'perf' });
+          for (const p of perf) {
+            const r = el('div');
+            r.append(el('span', { class: 'pl' }, p.label), el('span', { class: 'pv' }, typeof p.value === 'number' ? String(Math.round(p.value * 10) / 10) : p.value));
+            g.append(r);
+          }
+          sect.append(g);
+          c.append(sect);
+        }
+      }
+
+      function outTile(d, x, o) {
+        const sev = o.blackout === 'on' ? 'critical' : o.enabled && !o.active ? 'warning' : 'ok';
+        const here = d.id === s.current.director && x.key === s.current.system;
+        const b = el('button', { class: `out ${sev}${here && o.key === s.current.output ? ' sel' : ''}${o.blackout === 'on' ? ' blk' : ''}` });
+        b.onclick = () => rcs.send({ type: 'select-output', director: d.id, system: x.key, output: o.key });
+        const n = el('span', { class: 'on' });
+        n.append(el('span', { class: 'dot' }), o.name);
+        b.append(n, el('span', { class: 'om' }, `${res(o) || 'no format'} · ${!o.enabled ? 'disabled' : o.active ? 'active' : 'not active'}`), el('span', { class: 'om' }, o.targets.map((t) => t.name).join(', ') || 'nothing assigned'));
+        const bs = el('div', { class: 'badges' });
+        if (o.blackout === 'on' || o.blackout === 'partial') bs.append(el('span', { class: 'badge blk' }, o.blackout === 'on' ? 'BLACKOUT' : 'PART'));
+        if (o.identify) bs.append(el('span', { class: 'badge idn' }, 'IDENTIFY'));
+        b.append(bs);
+        return b;
+      }
+
+      // On a tall screen every server's outputs, grouped by server; a tap selects that server and output (the
+      // output keys follow it). With more servers than fit, the selected one and its neighbours show and the
+      // server buttons come back.
+      function drawGroups() {
+        const box = $('groups');
+        const all = servers();
+        const group = ({ d, x }) => {
+          const g = el('div', { class: 'grp' + (d.id === s.current.director && x.key === s.current.system ? ' cur' : '') });
+          const h = el('h2', { class: x.severity });
+          h.append(el('span', { class: 'dot' }), el('span', { class: 'gn' }, x.name), el('span', { class: 'badge ' + (x.role === 'director' ? 'dir' : 'ply') }, x.role === 'director' ? 'DIRECTOR' : 'PLAYER'), el('span', { class: 'm' }, `${x.ip || ''} · ${d.reachable ? x.state || '' : 'director not answering'}`));
+          const grid = el('div', { class: 'ogrid' });
+          for (const o of x.outputs) grid.append(outTile(d, x, o));
+          if (!x.outputs.length) grid.append(el('p', { class: 'note' }, 'No outputs reported.'));
+          g.append(h, grid);
+          return g;
+        };
+        box.replaceChildren(...all.map(group));
+        let cut = false;
+        if (box.scrollHeight > box.clientHeight + 1) {
+          cut = true;
+          const ci = Math.max(0, all.findIndex(({ d, x }) => d.id === s.current.director && x.key === s.current.system));
+          const fits = (a, b) => (box.replaceChildren(...all.slice(a, b).map(group)), box.scrollHeight <= box.clientHeight + 1);
+          let lo = ci, hi = ci + 1;
+          for (;;) {
+            if (hi < all.length && fits(lo, hi + 1)) { hi++; continue; }
+            if (lo > 0 && fits(lo - 1, hi)) { lo--; continue; }
+            break;
+          }
+          fits(lo, hi);
+          box.append(el('div', { class: 'swmore' }, `${all.length - (hi - lo)} more servers: pick one with the buttons above`));
+        }
+        $('tabs').hidden = !cut || all.length < 2;
       }
 
       function drawOutputs() {
@@ -287,7 +450,11 @@
         side.replaceChildren();
         if (!v) return;
         const { d, x } = v;
-        for (const o of x.outputs) {
+        const tall = isTall();
+        grid.classList.toggle('short', tall);
+        if (tall) drawGroups();
+        else $('groups').replaceChildren();
+        for (const o of tall ? [] : x.outputs) {
           const sev = o.blackout === 'on' ? 'critical' : o.enabled && !o.active ? 'warning' : 'ok';
           const b = el('button', { class: `out ${sev}${o.key === s.current.output ? ' sel' : ''}${o.blackout === 'on' ? ' blk' : ''}` });
           b.onclick = () => rcs.send({ type: 'select-output', output: o.key });
@@ -300,7 +467,7 @@
           b.append(bs);
           grid.append(b);
         }
-        if (!x.outputs.length) grid.append(el('p', { class: 'note' }, `${x.name} reports no outputs.`));
+        if (!x.outputs.length && !tall) grid.append(el('p', { class: 'note' }, `${x.name} reports no outputs.`));
         const o = x.outputs.find((y) => y.key === s.current.output) ?? x.outputs[0];
         side.append(el('h3', {}, o ? o.name : x.name));
         const kv = el('dl', { class: 'kv' });
