@@ -431,7 +431,17 @@ async function selectServer(ctx: C, director: unknown, system: unknown): Promise
   await draw(ctx);
 }
 
-async function selectOutput(ctx: C, key: unknown): Promise<void> {
+async function selectOutput(ctx: C, key: unknown, director?: unknown, system?: unknown): Promise<void> {
+  // A tall panel shows every server's outputs, so a tap can name another server's output.
+  if (rt && typeof director === 'string' && typeof system === 'string') {
+    const x = servers().find((s) => s.director.id === director && s.system.key === system);
+    if (!x || typeof key !== 'string' || !x.system.outputs.some((o) => o.key === key)) return;
+    const st = ctx.state.value;
+    if (st.director !== x.director.id || st.system !== x.system.key || st.output !== key) disarm();
+    if (st.director !== x.director.id || st.system !== x.system.key) rt.outPage = 0;
+    await ctx.state.patch({ director: x.director.id, system: x.system.key, output: key });
+    return draw(ctx);
+  }
   const srv = currentServer(ctx);
   if (!rt || !srv || typeof key !== 'string' || !srv.system.outputs.some((o) => o.key === key)) return;
   if (key !== ctx.state.value.output) disarm();
@@ -760,7 +770,7 @@ export default defineModule<State, Config>({
       case 'select':
         return selectServer(ctx, m.director, m.system);
       case 'select-output':
-        return selectOutput(ctx, m.output);
+        return selectOutput(ctx, m.output, m.director, m.system);
       case 'control': {
         // From a screen that already asked the operator to confirm (a dialog).
         const req = requestOf(m.req);

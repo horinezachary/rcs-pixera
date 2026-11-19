@@ -157,6 +157,23 @@ describe('controls', () => {
     expect(sim!.keys[KEY.OUT_BLACKOUT]).toMatchObject({ sublabel: 'OUTPUT ON' });
   });
 
+  it('picks another server\'s output from a tall panel, disarms, and the output keys follow it', async () => {
+    const { p, port } = await director();
+    await start([entry('00000001', port)], { allow: true });
+    await sim!.press(KEY.OUT_BLACKOUT);
+    await sim!.settle();
+    expect(last().armed?.what).toBeTruthy();
+    const imag = server('Player 2').outputs[1];
+    await sim!.sendUi({ type: 'select-output', director: '00000001', system: '10.10.30.12', output: imag.key });
+    await sim!.settle();
+    expect(last().current).toMatchObject({ director: '00000001', system: '10.10.30.12', output: imag.key });
+    expect(last().armed).toBeNull();
+    expect(sim!.keys[KEY.OUT[0]]).toMatchObject({ label: 'IMAG L' });
+    await sim!.sendUi({ type: 'select-output', director: '00000001', system: '10.10.30.12', output: 'nope' });
+    expect(last().current.output).toBe(imag.key);
+    expect(p.writes).toEqual([]);
+  });
+
   it('lets another key disarm, and a slow second press only arms again', async () => {
     const { p, port } = await director();
     await start([entry('00000001', port)], { allow: true });
