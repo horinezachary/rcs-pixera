@@ -16,6 +16,13 @@ pattern and an engine restart for a player.
 - **Alerts**: every active alert, worst first, and the event log since the module started.
 - **Setup**: directors by address and API port, found by **Scan network**, Allow controls and the alert limits.
 
+On a taller touchscreen (1920×1080) the Servers cards take the full height (one row up to three
+servers, then two and three rows) and add each server's outputs with format, state, blackout and what
+is assigned, all its alerts and its performance values. Servers that are lost or have alerts come
+first. Outputs shows every server's outputs at once, grouped by server: a tap selects that server and
+output, and the output keys follow it. The server buttons come back only when not every server fits.
+The 1920×440 bar is unchanged.
+
 The web view has the same pages with more detail: every performance value PIXERA reports, the MAC addresses,
 the licence, the event log with filters and blackout of everything.
 
